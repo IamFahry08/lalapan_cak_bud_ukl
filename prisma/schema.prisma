@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =====================
+// ENUM
+// =====================
+
+enum Role {
+  ADMIN
+  CUSTOMER
+}
+
+enum OrderStatus {
+  PENDING     // order baru masuk, belum diproses admin
+  PROCESSING  // admin terima & sedang dimasak
+  COMPLETED   // selesai, siap diambil
+}
+
+// =====================
+// MODELS
+// =====================
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(CUSTOMER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // relasi
+  orders Order[]
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique  // "Lalapan", "Minuman", dll
+  createdAt DateTime @default(now())
+
+  // relasi
+  menuItems MenuItem[]
+}
+
+model MenuItem {
+  id          String   @id @default(uuid())
+  name        String              // "Ayam Goreng Lalapan"
+  description String?             // opsional
+  price       Int                 // dalam rupiah, contoh: 15000
+  imageUrl    String?             // URL foto dari internet
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // relasi ke Category
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  // relasi ke OrderItem
+  orderItems OrderItem[]
+}
+
+model Order {
+  id         String      @id @default(uuid())
+  totalPrice Int
+  status     OrderStatus @default(PENDING)  // otomatis PENDING saat dibuat
+  note       String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+  orderItems OrderItem[]
+  payment    Payment?
+}
+
+model OrderItem {
+  id       Int @id @default(autoincrement())
+  quantity Int  // berapa banyak item ini dipesan
+  price    Int  // harga saat dipesan (disimpan supaya kalau harga menu berubah, data order tetap akurat)
+
+  // relasi ke MenuItem
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+
+  // relasi ke Order
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  amount    Int               // total yang dibayar
+  method    String   @default("DUMMY")
+  status    String   @default("PAID")
+  createdAt DateTime @default(now())
+
+  // relasi ke Order (satu order satu payment)
+  orderId String  @unique
+  order   Order   @relation(fields: [orderId], references: [id])
+}
