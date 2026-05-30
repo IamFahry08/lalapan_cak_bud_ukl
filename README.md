@@ -367,7 +367,7 @@ PORT            = 3000
 | Role | Nama |
 |------|------|
 | Backend Developer | Fahry |
-| Frontend Developer | (Nama teman) |
+| Frontend Developer | (Dzaky) |
 
 **Sekolah:** SMK Telkom Malang  
 **Kelas:** XI  
