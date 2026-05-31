@@ -19,6 +19,13 @@ import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  @Post('guest/:orderId')
+@ApiOperation({ summary: 'Payment guest (tanpa login)' })
+@ApiResponse({ status: 201, description: 'Pembayaran guest berhasil' })
+payGuest(@Param('orderId') orderId: string) {
+  return this.paymentsService.payGuest(orderId);
+}
+
   // POST /payments/:orderId → customer bayar order
   @Post(':orderId')
   @UseGuards(JwtAuthGuard, RolesGuard)

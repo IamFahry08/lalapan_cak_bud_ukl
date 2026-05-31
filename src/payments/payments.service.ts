@@ -5,6 +5,87 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class PaymentsService {
   constructor(private prisma: PrismaService) {}
 
+    async payGuest(orderId: string) {
+  try {
+    // cek apakah order ada
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order dengan ID ${orderId} tidak ditemukan`);
+    }
+
+    // cek apakah order ini memang order guest (tidak punya userId)
+    if (order.userId) {
+      return {
+        success: false,
+        message: 'Order ini bukan order guest, gunakan endpoint payment biasa',
+      };
+    }
+
+    // cek apakah sudah dibayar sebelumnya
+    const existingPayment = await this.prisma.payment.findUnique({
+      where: { orderId },
+    });
+
+    if (existingPayment) {
+      return {
+        success: false,
+        message: 'Order ini sudah dibayar sebelumnya',
+      };
+    }
+
+    // cek apakah order masih PENDING
+    if (order.status !== 'PENDING') {
+      return {
+        success: false,
+        message: 'Order ini tidak bisa dibayar karena statusnya bukan PENDING',
+      };
+    }
+
+    // buat payment dan update status order dalam satu transaksi
+    const result = await this.prisma.$transaction(async (prisma) => {
+      const payment = await prisma.payment.create({
+        data: {
+          orderId,
+          amount: order.totalPrice,
+          method: 'DUMMY',
+          status: 'PAID',
+        },
+      });
+
+      const updatedOrder = await prisma.order.update({
+        where: { id: orderId },
+        data: { status: 'PROCESSING' },
+        include: {
+          orderItems: {
+            include: {
+              menuItem: true,
+            },
+          },
+          payment: true,
+        },
+      });
+
+      return { payment, order: updatedOrder };
+    });
+
+    return {
+      success: true,
+      message: 'Pembayaran guest berhasil! Pesanan sedang diproses',
+      data: result,
+    };
+  } catch (error) {
+    console.error('Guest payment error:', error);
+    if (error instanceof NotFoundException) throw error;
+    return {
+      success: false,
+      message: `Ada yang salah: ${error.message}`,
+    };
+  }
+}
+
   // POST /payments/:orderId → customer bayar
   async pay(orderId: string, userId: string) {
     try {

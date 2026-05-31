@@ -73,8 +73,13 @@ model Order {
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 
-  userId     String
-  user       User        @relation(fields: [userId], references: [id])
+  userId     String?
+  user       User?        @relation(fields: [userId], references: [id])
+
+  // guest 
+  guestName  String?
+  guestPhone String?
+
   orderItems OrderItem[]
   payment    Payment?
 }

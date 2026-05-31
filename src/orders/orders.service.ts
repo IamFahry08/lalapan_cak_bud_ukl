@@ -1,11 +1,185 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+import { CreateGuestOrderDto } from './dto/create-guest-order.dto';
 
 @Injectable()
 export class OrdersService {
   constructor(private prisma: PrismaService) {}
+
+  //guest order
+  async createGuestOrder(dto: CreateGuestOrderDto) {
+    try {
+      const { items, note, guestName, guestPhone } = dto;
+
+      let totalPrice = 0;
+      const orderItemsData: {
+        menuItemId: string;
+        quantity: number;
+        price: number;
+      }[] = [];
+
+      for (const item of items) {
+        const menuItem = await this.prisma.menuItem.findUnique({
+          where: { id: item.menuItemId },
+        });
+
+        if (!menuItem) {
+          return {
+            success: false,
+            message: `Menu dengan ID ${item.menuItemId} tidak ditemukan`,
+          };
+        }
+
+        if (!menuItem.isAvailable) {
+          return {
+            success: false,
+            message: `Menu ${menuItem.name} sedang tidak tersedia`,
+          };
+        }
+
+        totalPrice += menuItem.price * item.quantity;
+        orderItemsData.push({
+          menuItemId: item.menuItemId,
+          quantity: item.quantity,
+          price: menuItem.price,
+        });
+      }
+
+      const order = await this.prisma.$transaction(async (prisma) => {
+        const newOrder = await prisma.order.create({
+          data: {
+            totalPrice,
+            note,
+            guestName, // simpan nama guest
+            guestPhone, // simpan nomor guest
+            // userId tidak diisi karena guest
+          },
+        });
+
+        await prisma.orderItem.createMany({
+          data: orderItemsData.map((item) => ({
+            ...item,
+            orderId: newOrder.id,
+          })),
+        });
+
+        return prisma.order.findUnique({
+          where: { id: newOrder.id },
+          include: {
+            orderItems: {
+              include: { menuItem: true },
+            },
+          },
+        });
+      });
+
+      return {
+        success: true,
+        message: 'Order guest berhasil dibuat',
+        data: order,
+      };
+    } catch (error) {
+      console.error('Create guest order error:', error);
+      return {
+        success: false,
+        message: `Ada yang salah: ${error.message}`,
+      };
+    }
+  }
+
+  async trackGuestOrder(orderId: string) {
+    try {
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        include: {
+          orderItems: {
+            include: {
+              menuItem: true,
+            },
+          },
+          payment: true,
+        },
+      });
+
+      if (!order) {
+        return {
+          success: false,
+          message: 'Order tidak ditemukan',
+        };
+      }
+
+      // pastikan ini order guest bukan order user login
+      if (order.userId) {
+        return {
+          success: false,
+          message: 'Gunakan login untuk tracking order ini',
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Status pesanan berhasil diambil',
+        data: {
+          orderId: order.id,
+          guestName: order.guestName,
+          status: order.status,
+          totalPrice: order.totalPrice,
+          note: order.note,
+          createdAt: order.createdAt,
+          orderItems: order.orderItems,
+          payment: order.payment,
+        },
+      };
+    } catch (error) {
+      console.error('Track guest order error:', error);
+      return {
+        success: false,
+        message: `Ada yang salah: ${error.message}`,
+      };
+    }
+  }
+
+  //fungsi order ulang
+  async reorder(orderId: string, userId: string) {
+    try {
+      // ambil order lama beserta item-itemnya
+      const oldOrder = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        include: {
+          orderItems: true,
+        },
+      });
+
+      if (!oldOrder) {
+        throw new NotFoundException('Order tidak ditemukan');
+      }
+
+      // buat order baru dengan item yang sama
+      const dto: CreateOrderDto = {
+        items: oldOrder.orderItems.map((item) => ({
+          menuItemId: item.menuItemId,
+          quantity: item.quantity,
+        })),
+        note: oldOrder.note ?? undefined,
+      };
+
+      // pakai fungsi create yang sudah ada
+      return this.create(dto, userId);
+    } catch (error) {
+      console.error('Reorder error:', error);
+      if (error instanceof NotFoundException) throw error;
+      return {
+        success: false,
+        message: `Ada yang salah: ${error.message}`,
+      };
+    }
+  }
 
   // POST /orders → customer buat order baru
   async create(createOrderDto: CreateOrderDto, userId: string) {
@@ -16,7 +190,11 @@ export class OrdersService {
       let totalPrice = 0;
 
       // validasi semua menuItem ada dan hitung harga
-      const orderItemsData: { menuItemId: string; quantity: number; price: number }[] = [];
+      const orderItemsData: {
+        menuItemId: string;
+        quantity: number;
+        price: number;
+      }[] = [];
 
       for (const item of items) {
         const menuItem = await this.prisma.menuItem.findUnique({
@@ -47,9 +225,18 @@ export class OrdersService {
         orderItemsData.push({
           menuItemId: item.menuItemId,
           quantity: item.quantity,
-          price: menuItem.price,  // snapshot harga saat order dibuat
+          price: menuItem.price, // snapshot harga saat order dibuat
         });
       }
+
+      // cek apakah ini order pertama user
+      const orderCount = await this.prisma.order.count({
+        where: { userId },
+      });
+
+      // kalau order pertama, kasih diskon 50%
+      const discount = orderCount === 0 ? 0.5 : 0;
+      const finalPrice = Math.round(totalPrice - totalPrice * discount);
 
       // buat Order dan semua OrderItem dalam satu transaksi atomik
       // kalau salah satu gagal, semuanya rollback
@@ -58,7 +245,7 @@ export class OrdersService {
         const newOrder = await prisma.order.create({
           data: {
             userId,
-            totalPrice,
+            totalPrice: finalPrice, // Simpan harga setelah diskon
             note,
             // status otomatis PENDING dari schema
           },
@@ -78,7 +265,7 @@ export class OrdersService {
           include: {
             orderItems: {
               include: {
-                menuItem: true,  // tampilkan detail menu
+                menuItem: true, // tampilkan detail menu
               },
             },
             user: {
@@ -110,7 +297,7 @@ export class OrdersService {
   async findAll() {
     try {
       const orders = await this.prisma.order.findMany({
-        orderBy: { createdAt: 'desc' },  // terbaru duluan
+        orderBy: { createdAt: 'desc' }, // terbaru duluan
         include: {
           orderItems: {
             include: {
@@ -146,7 +333,7 @@ export class OrdersService {
   async findMyOrders(userId: string) {
     try {
       const orders = await this.prisma.order.findMany({
-        where: { userId },  // filter by userId dari JWT token
+        where: { userId }, // filter by userId dari JWT token
         orderBy: { createdAt: 'desc' },
         include: {
           orderItems: {
@@ -165,6 +352,36 @@ export class OrdersService {
       };
     } catch (error) {
       console.error('FindMyOrders error:', error);
+      return {
+        success: false,
+        message: `Ada yang salah: ${error.message}`,
+      };
+    }
+  }
+
+  // GET /orders/guest/:phone — cari order by nomor HP guest
+  async findGuestOrders(guestPhone: string) {
+    try {
+      const orders = await this.prisma.order.findMany({
+        where: { guestPhone },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          orderItems: {
+            include: {
+              menuItem: true,
+            },
+          },
+          payment: true,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Order guest berhasil diambil',
+        data: orders,
+      };
+    } catch (error) {
+      console.error('FindGuestOrders error:', error);
       return {
         success: false,
         message: `Ada yang salah: ${error.message}`,

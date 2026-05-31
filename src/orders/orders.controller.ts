@@ -11,6 +11,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { CreateGuestOrderDto } from './dto/create-guest-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
@@ -23,6 +24,13 @@ import { ApiResponse, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
+  // POST /orders/guest — tidak butuh token
+  @Post('guest')
+  @ApiOperation({ summary: 'Buat order sebagai guest (tanpa login)' })
+  createGuestOrder(@Body() dto: CreateGuestOrderDto) {
+    return this.ordersService.createGuestOrder(dto);
+  }
+
   // GET /orders → admin lihat semua order
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -33,6 +41,12 @@ export class OrdersController {
     return this.ordersService.findAll();
   }
 
+  // GET /orders/guest/track/:orderId → tracking pesanan guest
+  @Get('guest/track/:orderId')
+  @ApiOperation({ summary: 'Tracking pesanan guest by Order ID' })
+  trackGuestOrder(@Param('orderId') orderId: string) {
+    return this.ordersService.trackGuestOrder(orderId);
+  }
   // POST /orders → customer buat order
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -46,10 +60,16 @@ export class OrdersController {
     return this.ordersService.create(createOrderDto, userId);
   }
 
-  // GET /orders/my → customer lihat order sendiri
-  // PENTING: route 'my' harus di atas ':id'
-  // karena kalau ':id' duluan, 'my' akan dianggap sebagai id
-  @Get('my')
+  // POST /orders/:id/reorder — buat ulang order yang sama
+  @Post(':id/reorder')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Pesan ulang dari order sebelumnya' })
+  reorder(@Param('id') id: string, @Request() req) {
+    return this.ordersService.reorder(id, req.user.id);
+  }
+
+  @Get('me')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.CUSTOMER)
   @ApiBearerAuth()
