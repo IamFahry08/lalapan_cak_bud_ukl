@@ -8,7 +8,11 @@
 
 Lalapan Cak Bud adalah platform pemesanan makanan berbasis web yang memungkinkan customer untuk melihat menu, melakukan pemesanan, dan membayar secara online tanpa harus datang langsung ke warung. Admin dapat mengelola menu, kategori, dan memproses pesanan masuk.
 
-Project ini dibuat sebagai bagian dari **Ujian Kenaikan Level (UKL)** dengan peran sebagai **Backend Developer**.`
+Sistem mendukung **dua mode pemesanan**:
+- **Customer login** — registrasi akun, login, pesan, bayar, dan tracking pesanan
+- **Guest order** — pesan tanpa perlu daftar akun (cukup isi nama & nomor HP)
+
+Project ini dibuat sebagai bagian dari **Ujian Kenaikan Level (UKL)** dengan peran sebagai **Backend Developer**.
 
 ---
 
@@ -29,22 +33,32 @@ Project ini dibuat sebagai bagian dari **Ujian Kenaikan Level (UKL)** dengan per
 
 ## 👥 Role & Fitur
 
-### Customer
+### Customer (Login)
 
 - Register & login akun
 - Lihat semua menu dan kategori
 - Filter menu berdasarkan kategori
 - Buat pesanan (order)
+- **Diskon 50% untuk pesanan pertama** 🎉
 - Bayar pesanan (dummy payment)
 - Lihat riwayat pesanan sendiri
 - Tracking status pesanan
+- **Pesan ulang (reorder)** dari pesanan sebelumnya
+
+### Guest (Tanpa Login)
+
+- Lihat semua menu dan kategori
+- **Buat pesanan tanpa akun** (cukup isi nama & nomor HP)
+- **Bayar pesanan guest** (dummy payment)
+- **Tracking pesanan** menggunakan Order ID
+- **Cek riwayat pesanan** menggunakan nomor HP
 
 ### Admin
 
 - Login dengan akun admin
 - Kelola kategori (CRUD)
 - Kelola menu makanan (CRUD)
-- Lihat semua pesanan masuk
+- Lihat semua pesanan masuk (termasuk guest order)
 - Update status pesanan (PENDING → PROCESSING → COMPLETED)
 - Lihat semua data payment
 
@@ -54,6 +68,8 @@ Project ini dibuat sebagai bagian dari **Ujian Kenaikan Level (UKL)** dengan per
 
 ```
 User (1) ──────── (banyak) Order
+                              │
+                              ├── guestName, guestPhone  (untuk guest order)
                               │
                               └── (banyak) OrderItem ──── (1) MenuItem
                               │
@@ -67,7 +83,7 @@ Category (1) ──── (banyak) MenuItem
 - **User** — data pengguna (admin & customer)
 - **Category** — kategori menu (Lalapan, Minuman, dll)
 - **MenuItem** — data menu makanan & minuman
-- **Order** — data pesanan customer
+- **Order** — data pesanan (customer login maupun guest)
 - **OrderItem** — detail item dalam satu pesanan
 - **Payment** — data pembayaran
 
@@ -83,6 +99,30 @@ enum OrderStatus {
   PENDING      // order baru masuk
   PROCESSING   // sedang dimasak
   COMPLETED    // selesai, siap diambil
+}
+```
+
+### Model Order (Updated)
+
+```prisma
+model Order {
+  id         String      @id @default(uuid())
+  totalPrice Int
+  status     OrderStatus @default(PENDING)
+  note       String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  // relasi ke User (opsional, karena bisa guest order)
+  userId     String?
+  user       User?       @relation(fields: [userId], references: [id])
+
+  // data guest (diisi kalau order tanpa login)
+  guestName  String?
+  guestPhone String?
+
+  orderItems OrderItem[]
+  payment    Payment?
 }
 ```
 
@@ -110,12 +150,15 @@ src/
 │   ├── menu-items.controller.ts
 │   ├── menu-items.service.ts
 │   └── menu-items.module.ts
-├── orders/                  # Kelola pesanan
+├── orders/                  # Kelola pesanan (customer + guest)
 │   ├── dto/
+│   │   ├── create-order.dto.ts
+│   │   ├── create-guest-order.dto.ts   # ← BARU: DTO untuk guest order
+│   │   └── update-order-status.dto.ts
 │   ├── orders.controller.ts
 │   ├── orders.service.ts
 │   └── orders.module.ts
-├── payments/                # Kelola pembayaran
+├── payments/                # Kelola pembayaran (customer + guest)
 │   ├── payments.controller.ts
 │   ├── payments.service.ts
 │   └── payments.module.ts
@@ -247,21 +290,25 @@ Buka browser: `http://localhost:3000/api`
 
 ### Orders
 
-| Method | Endpoint             | Akses          | Keterangan            |
-| ------ | -------------------- | -------------- | --------------------- |
-| POST   | `/orders`            | Customer       | Buat pesanan baru     |
-| GET    | `/orders`            | Admin          | Lihat semua pesanan   |
-| GET    | `/orders/my`         | Customer       | Lihat pesanan sendiri |
-| GET    | `/orders/:id`        | Customer/Admin | Lihat detail pesanan  |
-| PATCH  | `/orders/:id/status` | Admin          | Update status pesanan |
+| Method | Endpoint                        | Akses          | Keterangan                    |
+| ------ | ------------------------------- | -------------- | ----------------------------- |
+| POST   | `/orders`                       | Customer       | Buat pesanan baru (login)     |
+| POST   | `/orders/guest`                 | **Public**     | **Buat pesanan tanpa login**  |
+| POST   | `/orders/:id/reorder`           | Customer       | **Pesan ulang order lama**    |
+| GET    | `/orders`                       | Admin          | Lihat semua pesanan           |
+| GET    | `/orders/me`                    | Customer       | Lihat pesanan sendiri         |
+| GET    | `/orders/:id`                   | Customer/Admin | Lihat detail pesanan          |
+| GET    | `/orders/guest/track/:orderId`  | **Public**     | **Tracking pesanan guest**    |
+| PATCH  | `/orders/:id/status`            | Admin          | Update status pesanan         |
 
 ### Payments
 
-| Method | Endpoint             | Akses          | Keterangan          |
-| ------ | -------------------- | -------------- | ------------------- |
-| POST   | `/payments/:orderId` | Customer       | Bayar pesanan       |
-| GET    | `/payments`          | Admin          | Lihat semua payment |
-| GET    | `/payments/:orderId` | Customer/Admin | Detail payment      |
+| Method | Endpoint                     | Akses          | Keterangan              |
+| ------ | ---------------------------- | -------------- | ----------------------- |
+| POST   | `/payments/:orderId`         | Customer       | Bayar pesanan (login)   |
+| POST   | `/payments/guest/:orderId`   | **Public**     | **Bayar pesanan guest** |
+| GET    | `/payments`                  | Admin          | Lihat semua payment     |
+| GET    | `/payments/:orderId`         | Customer/Admin | Detail payment          |
 
 ---
 
@@ -283,20 +330,44 @@ Authorization: Bearer YOUR_JWT_TOKEN
 
 ## 💳 Alur Pemesanan
 
+### Alur Customer (Login)
+
 ```
-1. Customer login → dapat JWT token
+1. Customer register → POST /auth/register
          ↓
-2. GET /categories → lihat kategori
+2. Customer login → POST /auth/login → dapat JWT token
          ↓
-3. GET /menu-items → lihat & pilih menu
+3. Lihat kategori → GET /categories
          ↓
-4. POST /orders → buat pesanan
+4. Lihat & pilih menu → GET /menu-items
          ↓
-5. POST /payments/:orderId → bayar (dummy)
+5. Buat pesanan → POST /orders
+   ✨ Diskon 50% jika ini pesanan pertama!
          ↓
-6. GET /orders/my → cek status pesanan
+6. Bayar pesanan → POST /payments/:orderId (dummy)
          ↓
-7. Admin update status → PROCESSING → COMPLETED
+7. Cek status → GET /orders/me
+         ↓
+8. Admin update status → PENDING → PROCESSING → COMPLETED
+         ↓
+9. (Opsional) Pesan ulang → POST /orders/:id/reorder
+```
+
+### Alur Guest (Tanpa Login)
+
+```
+1. Lihat menu → GET /menu-items
+         ↓
+2. Buat pesanan → POST /orders/guest
+   (isi nama & nomor HP, tidak perlu akun)
+         ↓
+3. Simpan Order ID dari response
+         ↓
+4. Bayar pesanan → POST /payments/guest/:orderId (dummy)
+         ↓
+5. Tracking pesanan → GET /orders/guest/track/:orderId
+         ↓
+6. Admin update status → PENDING → PROCESSING → COMPLETED
 ```
 
 ---
@@ -315,7 +386,6 @@ POST /auth/register
 
 Response:
 {
-  "success": true,
   "message": "Register berhasil",
   "user": {
     "id": "uuid",
@@ -326,7 +396,7 @@ Response:
 }
 ```
 
-### Buat Order
+### Buat Order (Customer Login)
 
 ```json
 POST /orders
@@ -346,9 +416,96 @@ Response:
   "message": "Order berhasil dibuat",
   "data": {
     "id": "uuid-order",
-    "totalPrice": 35000,
+    "totalPrice": 17500,
     "status": "PENDING",
     "note": "Pedas ya kak",
+    "orderItems": [...]
+  }
+}
+```
+
+> **Note:** totalPrice = 17.500 karena diskon 50% untuk pesanan pertama (harga asli Rp 35.000)
+
+### Buat Order Guest (Tanpa Login)
+
+```json
+POST /orders/guest
+
+{
+  "guestName": "Budi",
+  "guestPhone": "08123456789",
+  "items": [
+    { "menuItemId": "menu-ayam-goreng", "quantity": 1 },
+    { "menuItemId": "menu-es-teh", "quantity": 2 }
+  ],
+  "note": "Tidak pake sambal"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Order guest berhasil dibuat",
+  "data": {
+    "id": "uuid-order",
+    "totalPrice": 25000,
+    "status": "PENDING",
+    "guestName": "Budi",
+    "guestPhone": "08123456789",
+    "orderItems": [...]
+  }
+}
+```
+
+### Bayar Pesanan Guest
+
+```json
+POST /payments/guest/:orderId
+
+Response:
+{
+  "success": true,
+  "message": "Pembayaran guest berhasil! Pesanan sedang diproses",
+  "data": {
+    "payment": { ... },
+    "order": { "status": "PROCESSING", ... }
+  }
+}
+```
+
+### Tracking Pesanan Guest
+
+```json
+GET /orders/guest/track/:orderId
+
+Response:
+{
+  "success": true,
+  "message": "Status pesanan berhasil diambil",
+  "data": {
+    "orderId": "uuid",
+    "guestName": "Budi",
+    "status": "PROCESSING",
+    "totalPrice": 25000,
+    "orderItems": [...],
+    "payment": { ... }
+  }
+}
+```
+
+### Reorder (Pesan Ulang)
+
+```json
+POST /orders/:id/reorder
+Authorization: Bearer TOKEN
+
+Response:
+{
+  "success": true,
+  "message": "Order berhasil dibuat",
+  "data": {
+    "id": "uuid-order-baru",
+    "totalPrice": 35000,
+    "status": "PENDING",
     "orderItems": [...]
   }
 }
