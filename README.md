@@ -206,9 +206,7 @@ npm install
 Buat file `.env` di root project:
 
 ```env
-DATABASE_URL="postgresql://USERNAME@localhost:5432/lalapan_cak_bud?schema=public"
-JWT_SECRET="lalapancakbud_secret_2025"
-PORT=3000
+umume
 ```
 
 ### 4. Setup Database
