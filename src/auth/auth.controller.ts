@@ -15,6 +15,7 @@ import {
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AuthGuard } from '@nestjs/passport';
 
 @ApiTags('Login/register')
@@ -46,5 +47,15 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getProfile(@Request() req) {
     return this.authService.getProfile(req.user.id);
+  }
+
+  @Post('update-profile')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update profile pengguna' })
+  @ApiResponse({ status: 200, description: 'Profile berhasil diperbarui' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  updateProfile(@Request() req, @Body() dto: UpdateProfileDto) {
+    return this.authService.updateProfile(req.user.id, dto);
   }
 }

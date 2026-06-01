@@ -19,6 +19,7 @@ enum OrderStatus {
   PENDING     // order baru masuk, belum diproses admin
   PROCESSING  // admin terima & sedang dimasak
   COMPLETED   // selesai, siap diambil
+  CANCELED    // dibatalkan
 }
 
 enum OrderType {
@@ -35,6 +36,7 @@ model User {
   name      String
   email     String   @unique
   password  String
+  phone     String?  // nomor hp customer, opsional
   role      Role     @default(CUSTOMER)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

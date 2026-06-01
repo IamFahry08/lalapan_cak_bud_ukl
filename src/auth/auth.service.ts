@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -39,6 +40,7 @@ export class AuthService {
           name,
           email,
           password: hashedPassword,
+          phone: dto.phone, // simpan phone jika ada
           // role otomatis CUSTOMER dari schema
         },
       });
@@ -50,6 +52,7 @@ export class AuthService {
           id: user.id,
           name: user.name,
           email: user.email,
+          phone: user.phone,
           role: user.role,
         },
       };
@@ -109,6 +112,7 @@ export class AuthService {
             id: user.id,
             name: user.name,
             email: user.email,
+            phone: user.phone,
             role: user.role,
           },
         },
@@ -151,6 +155,35 @@ export class AuthService {
       return {
         success: false,
         message: `Ada yang salah: ${error.message}`,
+      };
+    }
+  }
+
+  // ==================
+  // UPDATE PROFILE
+  // ==================
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    try {
+      const updatedUser = await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          name: dto.name,
+          phone: dto.phone,
+        },
+      });
+
+      const { password, ...result } = updatedUser;
+
+      return {
+        success: true,
+        message: 'Profile berhasil diperbarui',
+        data: result,
+      };
+    } catch (error) {
+      console.error('UpdateProfile error:', error);
+      return {
+        success: false,
+        message: `Gagal memperbarui profile: ${error.message}`,
       };
     }
   }
