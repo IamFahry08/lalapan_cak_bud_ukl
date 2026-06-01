@@ -1,9 +1,4 @@
-import {
-  Injectable,
-  ConflictException,
-  UnauthorizedException,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -12,7 +7,6 @@ import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
-  // inject PrismaService dan JwtService lewat constructor
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -22,97 +16,142 @@ export class AuthService {
   // REGISTER
   // ==================
   async register(dto: RegisterDto) {
-    // cek apakah email sudah terdaftar
-    const existing = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
+    try {
+      const { name, email, password } = dto;
 
-    // kalau sudah ada, lempar error 409 Conflict
-    if (existing) {
-      throw new ConflictException('Email sudah terdaftar');
+      // cek apakah email sudah terdaftar
+      const existing = await this.prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (existing) {
+        return {
+          success: false,
+          message: 'Email sudah terdaftar',
+        };
+      }
+
+      // hash password sebelum disimpan
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      const user = await this.prisma.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          // role otomatis CUSTOMER dari schema
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Register berhasil',
+        data: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+      };
+    } catch (error) {
+      console.error('Register error:', error);
+      return {
+        success: false,
+        message: `Ada yang salah: ${error.message}`,
+      };
     }
-
-    // hash password sebelum disimpan ke database
-    // angka 10 = salt rounds (semakin besar semakin aman tapi semakin lambat)
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
-
-    // simpan user baru ke database
-    const user = await this.prisma.user.create({
-      data: {
-        name: dto.name,
-        email: dto.email,
-        password: hashedPassword,
-        // role tidak perlu diisi, otomatis CUSTOMER dari schema Prisma
-      },
-    });
-
-    // return data user tapi TANPA password
-    return {
-      message: 'Register berhasil',
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-    };
   }
 
   // ==================
   // LOGIN
   // ==================
   async login(dto: LoginDto) {
-    // cari user berdasarkan email
-    const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
+    try {
+      const { email, password } = dto;
 
-    // kalau email tidak ditemukan, lempar error 401
-    // sengaja pesannya sama supaya tidak ketahuan mana yang salah
-    if (!user) {
-      throw new UnauthorizedException('Email atau password salah');
-    }
+      // cari user berdasarkan email
+      const user = await this.prisma.user.findUnique({
+        where: { email },
+      });
 
-    // bandingkan password yang diketik dengan hash di database
-    const isMatch = await bcrypt.compare(dto.password, user.password);
+      // kalau email tidak ditemukan
+      if (!user) {
+        return {
+          success: false,
+          message: 'Email tidak terdaftar',  // ← lebih informatif
+        };
+      }
 
-    // kalau password salah, lempar error 401
-    if (!isMatch) {
-      throw new UnauthorizedException('Email atau password salah');
-    }
+      // bandingkan password dengan hash di database
+      const isMatch = await bcrypt.compare(password, user.password);
 
-    // buat JWT token
-    // payload = data yang disimpan di dalam token
-    const token = this.jwtService.sign({
-      sub: user.id,      // sub = subject, biasanya diisi id user
-      email: user.email,
-      role: user.role,   // role penting untuk RolesGuard nanti
-    });
+      // kalau password salah
+      if (!isMatch) {
+        return {
+          success: false,
+          message: 'Password salah',  // ← lebih informatif
+        };
+      }
 
-    return {
-      message: 'Login berhasil',
-      access_token: token,  // ini yang disimpan frontend
-      user: {
-        id: user.id,
-        name: user.name,
+      // buat JWT token
+      const token = this.jwtService.sign({
+        sub: user.id,
         email: user.email,
         role: user.role,
-      },
-    };
+      });
+
+      return {
+        success: true,
+        message: 'Login berhasil',
+        data: {
+          access_token: token,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          },
+        },
+      };
+    } catch (error) {
+      console.error('Login error:', error);
+      return {
+        success: false,
+        message: `Ada yang salah: ${error.message}`,
+      };
+    }
   }
 
   // ==================
   // GET PROFILE
   // ==================
   async getProfile(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    try {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
 
-    if (!user) throw new NotFoundException('User tidak ditemukan');
+      if (!user) {
+        return {
+          success: false,
+          message: 'User tidak ditemukan',
+        };
+      }
 
-    // hapus password dari response
-    const { password, ...result } = user;
-    return result;
+      // hapus password dari response
+      const { password, ...result } = user;
+
+      return {
+        success: true,
+        message: 'Profile berhasil diambil',
+        data: result,
+      };
+    } catch (error) {
+      console.error('GetProfile error:', error);
+      return {
+        success: false,
+        message: `Ada yang salah: ${error.message}`,
+      };
+    }
   }
 }
