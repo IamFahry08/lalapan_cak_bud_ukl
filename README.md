@@ -532,10 +532,7 @@ Project ini di-deploy di **Railway**.
 ### Environment Variables di Railway
 
 ```
-DATABASE_URL    = (dari Railway PostgreSQL service)
-JWT_SECRET      = lalapancakbud_secret_2025
-NODE_ENV        = production
-PORT            = 3000
+umume
 ```
 
 ---
