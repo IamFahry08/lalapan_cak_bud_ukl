@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -10,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { UpdateReviewDto } from './dto/update-review.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -62,5 +64,24 @@ export class ReviewsController {
   @ApiResponse({ status: 404, description: 'Ulasan tidak ditemukan' })
   remove(@Param('id') id: string) {
     return this.reviewsService.remove(id);
+  }
+
+  // ====================
+  // PATCH /reviews/:id → Edit Ulasan (Owner Only)
+  // ====================
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Edit ulasan sendiri (Hanya pemilik ulasan)' })
+  @ApiResponse({ status: 200, description: 'Ulasan berhasil diperbarui' })
+  @ApiResponse({ status: 400, description: 'Validasi gagal' })
+  @ApiResponse({ status: 401, description: 'Unauthorized / Token JWT salah' })
+  @ApiResponse({ status: 403, description: 'Bukan pemilik ulasan' })
+  update(
+    @Param('id') id: string,
+    @Request() req,
+    @Body() updateReviewDto: UpdateReviewDto,
+  ) {
+    return this.reviewsService.update(id, req.user.id, updateReviewDto);
   }
 }

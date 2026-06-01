@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { UpdateReviewDto } from './dto/update-review.dto';
 
 @Injectable()
 export class ReviewsService {
@@ -117,6 +118,55 @@ export class ReviewsService {
       return {
         success: false,
         message: `Gagal menghapus ulasan: ${error.message}`,
+      };
+    }
+  }
+
+  // ====================
+  // UPDATE REVIEW (Owner Only)
+  // ====================
+  async update(id: string, userId: string, dto: UpdateReviewDto) {
+    try {
+      // 1. Cari ulasan yang mau diedit
+      const existing = await this.prisma.review.findUnique({
+        where: { id },
+      });
+
+      if (!existing) {
+        return {
+          success: false,
+          message: 'Ulasan tidak ditemukan',
+        };
+      }
+
+      // 2. Keamanan: Pastikan yang edit adalah pemilik ulasan
+      if (existing.userId !== userId) {
+        return {
+          success: false,
+          message: 'Anda tidak diizinkan mengubah ulasan milik orang lain',
+        };
+      }
+
+      // 3. Update data di database
+      const updatedReview = await this.prisma.review.update({
+        where: { id },
+        data: {
+          rating: dto.rating,
+          menuReview: dto.menuReview,
+          suggestions: dto.suggestions,
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Ulasan berhasil diperbarui',
+        data: updatedReview,
+      };
+    } catch (error) {
+      console.error('Update review error:', error);
+      return {
+        success: false,
+        message: `Gagal memperbarui ulasan: ${error.message}`,
       };
     }
   }
