@@ -42,7 +42,8 @@ model User {
   updatedAt DateTime @updatedAt
 
   // relasi
-  orders Order[]
+  orders  Order[]
+  reviews Review[] // ulasan dari user
 }
 
 model Category {
@@ -116,4 +117,16 @@ model Payment {
   // relasi ke Order (satu order satu payment)
   orderId String  @unique
   order   Order   @relation(fields: [orderId], references: [id])
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  rating      Int      // nilai 1 sampai 5 bintang
+  menuReview  String   // ulasan rasa masakan, sambal, dll
+  suggestions String?  // kritik & saran, opsional
+  createdAt   DateTime @default(now())
+
+  // relasi ke User
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 }
