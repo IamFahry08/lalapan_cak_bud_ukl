@@ -6,9 +6,12 @@ import {
   IsArray,
   ValidateNested,
   Min,
+  IsEnum,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import { OrderType } from '@prisma/client';
+
 
 // DTO untuk tiap item yang dipesan
 export class OrderItemDto {
@@ -30,6 +33,18 @@ export class CreateOrderDto {
   @ValidateNested({ each: true }) // validasi tiap item di array
   @Type(() => OrderItemDto) // transform tiap item jadi OrderItemDto
   items: OrderItemDto[];
+
+  @ApiProperty({ 
+    enum: OrderType, 
+    example: 'DINE_IN',
+    description: 'DINE_IN = makan di tempat, TAKE_AWAY = bawa pulang',
+    required: false,
+    default: 'DINE_IN'
+  })
+  @IsOptional()
+  @IsEnum(OrderType)
+  orderType?: OrderType;
+
 
   @ApiProperty({ example: 'Pedas ya kak', required: false })
   @IsOptional()

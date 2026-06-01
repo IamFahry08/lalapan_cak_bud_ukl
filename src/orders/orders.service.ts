@@ -58,7 +58,7 @@ export class OrdersService {
             note,
             guestName, // simpan nama guest
             guestPhone, // simpan nomor guest
-            // userId tidak diisi karena guest
+            orderType: dto.orderType,
           },
         });
 
@@ -166,6 +166,7 @@ export class OrdersService {
           menuItemId: item.menuItemId,
           quantity: item.quantity,
         })),
+        orderType: oldOrder.orderType,
         note: oldOrder.note ?? undefined,
       };
 
@@ -247,6 +248,7 @@ export class OrdersService {
             userId,
             totalPrice: finalPrice, // Simpan harga setelah diskon
             note,
+            orderType: createOrderDto.orderType,
             // status otomatis PENDING dari schema
           },
         });

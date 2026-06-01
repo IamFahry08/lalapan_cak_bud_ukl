@@ -21,6 +21,11 @@ enum OrderStatus {
   COMPLETED   // selesai, siap diambil
 }
 
+enum OrderType {
+  DINE_IN    // makan di tempat — pakai piring & gelas
+  TAKE_AWAY  // bawa pulang — dibungkus
+}
+
 // =====================
 // MODELS
 // =====================
@@ -69,6 +74,7 @@ model Order {
   id         String      @id @default(uuid())
   totalPrice Int
   status     OrderStatus @default(PENDING)  // otomatis PENDING saat dibuat
+  orderType  OrderType   @default(DINE_IN)  // ← tambah ini
   note       String?
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
