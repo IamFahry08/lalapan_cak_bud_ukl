@@ -53,6 +53,25 @@ export class MenuItemsService {
   //beside category :
   async findAllGrouped() {
     try {
+      // 1. Ambil jumlah yang terjual (quantity) untuk semua menu item dari order yang sukses/selesai
+      const soldCounts = await this.prisma.orderItem.groupBy({
+        by: ['menuItemId'],
+        where: {
+          order: {
+            status: 'COMPLETED',
+          },
+        },
+        _sum: {
+          quantity: true,
+        },
+      });
+
+      // Ubah data database menjadi Map (pasangan key-value) agar pencarian data cepat
+      const soldMap = new Map<string, number>();
+      soldCounts.forEach((item) => {
+        soldMap.set(item.menuItemId, item._sum.quantity || 0);
+      });
+
       const data = await this.prisma.category.findMany({
         orderBy: { createdAt: 'asc' },
         include: {
@@ -63,10 +82,19 @@ export class MenuItemsService {
         },
       });
 
+      // 2. Tempelkan data soldCount ke tiap menu item
+      const dataWithSoldCount = data.map((category) => ({
+        ...category,
+        menuItems: category.menuItems.map((item) => ({
+          ...item,
+          soldCount: soldMap.get(item.id) || 0,
+        })),
+      }));
+
       return {
         success: true,
         message: 'Menu berhasil diambil per kategori',
-        data,
+        data: dataWithSoldCount,
       };
     } catch (error) {
       console.error('FindAllGrouped error:', error);
@@ -79,6 +107,24 @@ export class MenuItemsService {
 
   async findAll(categoryId?: string) {
     try {
+      // 1. Ambil jumlah yang terjual (quantity) untuk semua menu item
+      const soldCounts = await this.prisma.orderItem.groupBy({
+        by: ['menuItemId'],
+        where: {
+          order: {
+            status: 'COMPLETED',
+          },
+        },
+        _sum: {
+          quantity: true,
+        },
+      });
+
+      const soldMap = new Map<string, number>();
+      soldCounts.forEach((item) => {
+        soldMap.set(item.menuItemId, item._sum.quantity || 0);
+      });
+
       const menuItems = await this.prisma.menuItem.findMany({
         where: categoryId
           ? { categoryId } // kalau ada filter kategori, pakai
@@ -89,10 +135,16 @@ export class MenuItemsService {
         orderBy: { createdAt: 'asc' },
       });
 
+      // 2. Tempelkan data soldCount ke tiap menu item
+      const menuItemsWithSoldCount = menuItems.map((item) => ({
+        ...item,
+        soldCount: soldMap.get(item.id) || 0,
+      }));
+
       return {
         success: true,
         message: 'Menu berhasil diambil',
-        data: menuItems,
+        data: menuItemsWithSoldCount,
       };
     } catch (error) {
       console.error('FindAll menu item error:', error);
@@ -116,10 +168,28 @@ export class MenuItemsService {
         throw new NotFoundException(`Menu dengan ID ${id} tidak ditemukan`);
       }
 
+      // Hitung soldCount spesifik untuk 1 menu item ini
+      const soldAggregate = await this.prisma.orderItem.aggregate({
+        where: {
+          menuItemId: id,
+          order: {
+            status: 'COMPLETED',
+          },
+        },
+        _sum: {
+          quantity: true,
+        },
+      });
+
+      const soldCount = soldAggregate._sum.quantity || 0;
+
       return {
         success: true,
         message: 'fungsi sortir berdasarkan id berhasil : Menu berhasil diambil',
-        data: menuItem,
+        data: {
+          ...menuItem,
+          soldCount,
+        },
       };
     } catch (error) {
       console.error('FindOne menu item error:', error);
