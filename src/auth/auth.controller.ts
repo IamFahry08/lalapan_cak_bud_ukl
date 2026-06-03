@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   Request,
   UseGuards,
@@ -49,7 +50,7 @@ export class AuthController {
     return this.authService.getProfile(req.user.id);
   }
 
-  @Post('update-profile')
+  @Patch('update-profile')
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update profile pengguna' })
