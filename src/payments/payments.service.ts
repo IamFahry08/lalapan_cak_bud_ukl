@@ -1,93 +1,94 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CreatePaymentDto } from './dto/create-payment.dto';
 
 @Injectable()
 export class PaymentsService {
   constructor(private prisma: PrismaService) {}
 
-    async payGuest(orderId: string) {
-  try {
-    // cek apakah order ada
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-    });
-
-    if (!order) {
-      throw new NotFoundException(`Order dengan ID ${orderId} tidak ditemukan`);
-    }
-
-    // cek apakah order ini memang order guest (tidak punya userId)
-    if (order.userId) {
-      return {
-        success: false,
-        message: 'Order ini bukan order guest, gunakan endpoint payment biasa',
-      };
-    }
-
-    // cek apakah sudah dibayar sebelumnya
-    const existingPayment = await this.prisma.payment.findUnique({
-      where: { orderId },
-    });
-
-    if (existingPayment) {
-      return {
-        success: false,
-        message: 'Order ini sudah dibayar sebelumnya',
-      };
-    }
-
-    // cek apakah order masih PENDING
-    if (order.status !== 'PENDING') {
-      return {
-        success: false,
-        message: 'Order ini tidak bisa dibayar karena statusnya bukan PENDING',
-      };
-    }
-
-    // buat payment dan update status order dalam satu transaksi
-    const result = await this.prisma.$transaction(async (prisma) => {
-      const payment = await prisma.payment.create({
-        data: {
-          orderId,
-          amount: order.totalPrice,
-          method: 'DUMMY',
-          status: 'PAID',
-        },
-      });
-
-      const updatedOrder = await prisma.order.update({
+  async payGuest(orderId: string, dto?: CreatePaymentDto) {
+    try {
+      // cek apakah order ada
+      const order = await this.prisma.order.findUnique({
         where: { id: orderId },
-        data: { status: 'PROCESSING' },
-        include: {
-          orderItems: {
-            include: {
-              menuItem: true,
-            },
-          },
-          payment: true,
-        },
       });
 
-      return { payment, order: updatedOrder };
-    });
+      if (!order) {
+        throw new NotFoundException(`Order dengan ID ${orderId} tidak ditemukan`);
+      }
 
-    return {
-      success: true,
-      message: 'Pembayaran guest berhasil! Pesanan sedang diproses',
-      data: result,
-    };
-  } catch (error) {
-    console.error('Guest payment error:', error);
-    if (error instanceof NotFoundException) throw error;
-    return {
-      success: false,
-      message: `Ada yang salah: ${error.message}`,
-    };
+      // cek apakah order ini memang order guest (tidak punya userId)
+      if (order.userId) {
+        return {
+          success: false,
+          message: 'Order ini bukan order guest, gunakan endpoint payment biasa',
+        };
+      }
+
+      // cek apakah sudah dibayar sebelumnya
+      const existingPayment = await this.prisma.payment.findUnique({
+        where: { orderId },
+      });
+
+      if (existingPayment) {
+        return {
+          success: false,
+          message: 'Order ini sudah dibayar sebelumnya',
+        };
+      }
+
+      // cek apakah order masih PENDING
+      if (order.status !== 'PENDING') {
+        return {
+          success: false,
+          message: 'Order ini tidak bisa dibayar karena statusnya bukan PENDING',
+        };
+      }
+
+      // buat payment dan update status order dalam satu transaksi
+      const result = await this.prisma.$transaction(async (prisma) => {
+        const payment = await prisma.payment.create({
+          data: {
+            orderId,
+            amount: order.totalPrice,
+            method: dto?.method || 'CASH', // Simpan metode pembayaran dinamis (default: CASH)
+            status: 'PAID',
+          },
+        });
+
+        const updatedOrder = await prisma.order.update({
+          where: { id: orderId },
+          data: { status: 'PROCESSING' },
+          include: {
+            orderItems: {
+              include: {
+                menuItem: true,
+              },
+            },
+            payment: true,
+          },
+        });
+
+        return { payment, order: updatedOrder };
+      });
+
+      return {
+        success: true,
+        message: 'Pembayaran guest berhasil! Pesanan sedang diproses',
+        data: result,
+      };
+    } catch (error) {
+      console.error('Guest payment error:', error);
+      if (error instanceof NotFoundException) throw error;
+      return {
+        success: false,
+        message: `Ada yang salah: ${error.message}`,
+      };
+    }
   }
-}
 
   // POST /payments/:orderId → customer bayar
-  async pay(orderId: string, userId: string) {
+  async pay(orderId: string, userId: string, dto?: CreatePaymentDto) {
     try {
       // cek apakah order ada
       const order = await this.prisma.order.findUnique({
@@ -133,7 +134,7 @@ export class PaymentsService {
           data: {
             orderId,
             amount: order.totalPrice,
-            method: 'DUMMY',
+            method: dto?.method || 'CASH', // Simpan metode pembayaran dinamis (default: CASH)
             status: 'PAID',
           },
         });

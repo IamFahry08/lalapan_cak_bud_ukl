@@ -58,7 +58,9 @@ export class MenuItemsService {
         by: ['menuItemId'],
         where: {
           order: {
-            status: 'COMPLETED',
+            status: {
+              in: ['PROCESSING', 'COMPLETED'],
+            },
           },
         },
         _sum: {
@@ -112,7 +114,9 @@ export class MenuItemsService {
         by: ['menuItemId'],
         where: {
           order: {
-            status: 'COMPLETED',
+            status: {
+              in: ['PROCESSING', 'COMPLETED'],
+            },
           },
         },
         _sum: {
@@ -173,7 +177,9 @@ export class MenuItemsService {
         where: {
           menuItemId: id,
           order: {
-            status: 'COMPLETED',
+            status: {
+              in: ['PROCESSING', 'COMPLETED'],
+            },
           },
         },
         _sum: {
