@@ -110,7 +110,7 @@ model OrderItem {
 model Payment {
   id        String   @id @default(uuid())
   amount    Int               // total yang dibayar
-  method    String   @default("DUMMY")
+  method    String   @default("QRIS")
   status    String   @default("PAID")
   createdAt DateTime @default(now())
 

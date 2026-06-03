@@ -6,7 +6,7 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 export class PaymentsService {
   constructor(private prisma: PrismaService) {}
 
-  async payGuest(orderId: string, dto?: CreatePaymentDto) {
+  async payGuest(orderId: string, dto: CreatePaymentDto) {
     try {
       // cek apakah order ada
       const order = await this.prisma.order.findUnique({
@@ -51,7 +51,7 @@ export class PaymentsService {
           data: {
             orderId,
             amount: order.totalPrice,
-            method: dto?.method || 'CASH', // Simpan metode pembayaran dinamis (default: CASH)
+            method: dto.method, // Simpan metode pembayaran dinamis dari DTO
             status: 'PAID',
           },
         });
@@ -88,7 +88,7 @@ export class PaymentsService {
   }
 
   // POST /payments/:orderId → customer bayar
-  async pay(orderId: string, userId: string, dto?: CreatePaymentDto) {
+  async pay(orderId: string, userId: string, dto: CreatePaymentDto) {
     try {
       // cek apakah order ada
       const order = await this.prisma.order.findUnique({
@@ -134,7 +134,7 @@ export class PaymentsService {
           data: {
             orderId,
             amount: order.totalPrice,
-            method: dto?.method || 'CASH', // Simpan metode pembayaran dinamis (default: CASH)
+            method: dto.method, // Simpan metode pembayaran dinamis dari DTO
             status: 'PAID',
           },
         });
