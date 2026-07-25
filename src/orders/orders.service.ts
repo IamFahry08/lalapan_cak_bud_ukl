@@ -257,6 +257,7 @@ export class OrdersService {
         await prisma.orderItem.createMany({
           data: orderItemsData.map((item) => ({
             ...item,
+
             orderId: newOrder.id,
           })),
         });
